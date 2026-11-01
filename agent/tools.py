@@ -6,6 +6,8 @@ from .config import DATA_BASE_URL
 
 
 def get_calendar_day(date):
+    """Fetches the appointments of one day. Errors are returned, not raised,
+    so the model can see them and answer accordingly."""
     url = f"{DATA_BASE_URL}/calendar/{date}.json"
     try:
         with urllib.request.urlopen(url) as resp:
@@ -16,6 +18,7 @@ def get_calendar_day(date):
         return {"error": f"HTTP {e.code}"}
 
 
+# Tool schema sent to the model. The descriptions decide whether and how the model calls the tool.
 TOOLS = [
     {
         "type": "function",
