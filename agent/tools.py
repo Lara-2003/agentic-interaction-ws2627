@@ -7,15 +7,23 @@ from .config import DATA_BASE_URL
 
 def get_calendar_day(date):
     """Fetches the appointments of one day. Errors are returned, not raised,
-    so the model can see them and answer accordingly."""
+    so the model can see them and the run continues."""
     url = f"{DATA_BASE_URL}/calendar/{date}.json"
     try:
-        with urllib.request.urlopen(url) as resp:
+        with urllib.request.urlopen(url, timeout=10) as resp:
             return json.load(resp)
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return {"error": "no data for this day"}
         return {"error": f"HTTP {e.code}"}
+    except Exception as e: 
+        return {"error": f"could not load data: {e}"}
+
+
+
+TOOL_FUNCTIONS = {
+    "get_calendar_day": get_calendar_day,
+}
 
 
 # Tool schema sent to the model. The descriptions decide whether and how the model calls the tool.

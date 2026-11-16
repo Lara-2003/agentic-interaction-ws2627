@@ -34,7 +34,27 @@ From the repository root:
 python -m agent "Was habe ich am 29. Oktober 2026 vor?"
 ```
 
-The agent prints the answer and exits with code 0. The mock calendar covers 26 Oct to 8 Nov 2026.
+A system prompt tells the model that it is a calendar assistant, gives it today's date and asks it
+to look up every needed day with the tool instead of inventing appointments.
+
+The agent works in a loop: each step is one model call; requested tool calls are executed and
+their results sent back, until the model answers without a tool call. A failing tool call does
+not abort the run — the error is passed to the model as the tool result.
+
+- Answer found: prints the answer, logs `final`, exit code 0.
+- Error (model call failed, or step limit of 10 model calls reached): logs `error`, exit code 1.
+
+The mock calendar covers 26 Oct to 8 Nov 2026.
+
+## Tests
+
+```bash
+python test_agent.py
+```
+
+Runs `python -m agent` with the real client for every scenario in `LIVE_SCENARIOS` (normal
+questions and edge cases such as missing data, unreachable data server, step limit, wrong API
+key) and checks exit code and log. Uses API tokens; if a run hits the rate limit, the script waits 60 s and repeats that scenario.
 
 ## Run log
 
@@ -49,6 +69,7 @@ Every run writes its own file `logs/<timestamp>_<run_id>.jsonl` with one JSON ob
 | `ok`                | Whether the step succeeded                             |
 | `model`             | Model name as sent to the endpoint                     |
 | `duration_ms`       | Duration of the step                                   |
+| `step`              | Number of the loop step (model call) the event belongs to |
 
 ## Structure
 
