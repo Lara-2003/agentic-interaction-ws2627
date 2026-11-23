@@ -16,6 +16,21 @@ LIVE_SCENARIOS = [
     {"name": "several days in one task",
      "task": "An welchem Tag zwischen dem 2. und 4. November 2026 habe ich die wenigsten Termine?",
      "exit": 0, "end": "final"},
+    {"name": "exercise 4: train + weather",
+     "task": "How do I get to Munich on 29 Oct 2026, and do I need an umbrella?",
+     "exit": 0, "end": "final", "tools": {"get_connections", "get_weather", "get_calendar_day"}},
+    {"name": "train suggestion checked against calendar",
+     "task": "Welchen Zug nehme ich am 29. Oktober 2026 nach München zum Werkstattbesuch?",
+     "exit": 0, "end": "final", "tools": {"get_connections", "get_calendar_day"}},
+    {"name": "weather only",
+     "task": "Brauche ich am 29. Oktober 2026 in Ulm einen Regenschirm?",
+     "exit": 0, "end": "final", "tools": {"get_weather"}},
+    {"name": "city without data -> no invented values",
+     "task": "What is the weather in Berlin on 29 Oct 2026?",
+     "exit": 0, "end": "final", "tool_fail": True},
+    {"name": "day without data -> no invented trains",
+     "task": "Welche Züge fahren am 24. Dezember 2026 von Ulm nach München?",
+     "exit": 0, "end": "final", "tool_fail": True},
     {"name": "no tool needed",
      "task": "Hallo, wer bist du?",
      "exit": 0, "end": "final"},
@@ -33,6 +48,12 @@ LIVE_SCENARIOS = [
      "task": "What is on 29 Oct 2026 and on 30 Oct 2026?",
      "env": {"MAX_STEPS": "1"},
      "exit": 1, "end": "error"},
+    {"name": "step limit reached after several tool steps -> error",
+     "task": "Check my calendar day by day starting on 26 Oct 2026: look up one day, read the result, "
+             "and only then decide whether to look up the next day. Stop at the first day that has "
+             "an appointment after 18:00. Which day is it?",
+     "env": {"MAX_STEPS": "2"},
+     "exit": 1, "end": "error"},
     {"name": "wrong API key -> error",
      "task": "Was habe ich am 29. Oktober 2026 vor?",
      "env": {"OPENAI_API_KEY": "invalid-key"},
@@ -42,8 +63,8 @@ LIVE_SCENARIOS = [
      "env": {"MODEL": "does-not-exist"},
      "exit": 1, "end": "error"},
 ]
-RATE_LIMIT_WAIT = 60   # seconds to wait after hitting the rate limit (8,000 tokens per minute)
-MAX_RETRIES = 3        # how often a scenario is repeated because of the rate limit
+RATE_LIMIT_WAIT = 60   
+MAX_RETRIES = 3      
 
 
 def run_once(s, log_dir):
@@ -68,7 +89,7 @@ def hit_rate_limit(proc, events):
 
 
 def run_live():
-    sys.stdout.reconfigure(encoding="utf-8")  # model answers can contain non-cp1252 characters
+    sys.stdout.reconfigure(encoding="utf-8")  
     log_dir = Path(__file__).parent / "logs"
     results = []
     for s in LIVE_SCENARIOS:
@@ -98,6 +119,9 @@ def run_live():
             problems.append(f"last log event {last}, expected {s['end']}")
         if s.get("tool_fail") and not any(e["event"] == "tool_result" and not e["ok"] for e in events):
             problems.append("expected a failed tool_result, found none")
+        used = {e.get("tool") for e in events if e["event"] == "tool_call"}
+        if s.get("tools") and not s["tools"] <= used:
+            problems.append(f"expected tools {sorted(s['tools'])}, used {sorted(t for t in used if t)}")
         verdict = "PASS" if not problems else "FAIL  " + "; ".join(problems)
         print(f"\nexit code: {proc.returncode}  ->  {verdict}")
         results.append((s["name"], verdict))
