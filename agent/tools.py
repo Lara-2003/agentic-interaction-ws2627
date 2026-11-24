@@ -56,9 +56,68 @@ def get_weather(city, date):
     return _fetch(f"weather/{_city_code(city)}/{_check_date(date)}.json")
 
 
+HOME_CITY = "ulm"  # the user lives in Ulm (scenario of exercise 2)
+
+
+def _minutes(hhmm):
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def _place_of(location):
+    """Where an appointment takes place: "online", a city code, or HOME_CITY if the location
+    names no known city (e.g. a room like "O27/3302")."""
+    loc = (location or "").lower().replace("ü", "ue")
+    if "online" in loc:
+        return "online"
+    for code in ("muenchen", "ulm"):
+        if code in loc:
+            return code
+    return HOME_CITY
+
+
+def _check_against_calendar(connection, events, src, dst):
+    """Compares one train with the appointments of the day. Done in code, not by the model,
+    because the model compared times unreliably (e.g. called a 9:00 meeting "before" a 7:12 train)."""
+    dep, arr = _minutes(connection["departure"]), _minutes(connection["arrival"])
+    problems, notes = [], []
+    for ev in events:
+        if ev.get("all_day") or not ev.get("start"):
+            continue
+        start, end = _minutes(ev["start"]), _minutes(ev["end"])
+        what = f"{ev['title']} {ev['start']}-{ev['end']} ({ev.get('location') or 'no location'})"
+        place = _place_of(ev.get("location"))
+        if end <= dep:
+            continue  # over before the train leaves
+        if place == "online":
+            if start < arr:
+                notes.append(f"online appointment during the ride: {what}")
+        elif place == dst:
+            if start < arr:
+                problems.append(f"arrives too late for {what}")
+            else:
+                notes.append(f"arrives in time for {what}")
+        else:
+            later = " (unless you travel back in time)" if start >= arr else ""
+            problems.append(f"cannot attend in person, you will have left {src}: {what}{later}")
+    return {"fits_calendar": not problems, "conflicts": problems, "notes": notes}
+
+
 def get_connections(from_city, to_city, date):
-    """Fetches the train connections from one city to another on one day."""
-    return _fetch(f"transit/{_city_code(from_city)}/{_city_code(to_city)}/{_check_date(date)}.json")
+    """Fetches the train connections from one city to another on one day and checks every
+    connection against the calendar of that day (field "calendar_check")."""
+    src, dst, day = _city_code(from_city), _city_code(to_city), _check_date(date)
+    result = _fetch(f"transit/{src}/{dst}/{day}.json")
+    if "error" in result:
+        return result
+    calendar = _fetch(f"calendar/{day}.json")
+    if "error" in calendar:
+        result["calendar_check"] = f"calendar not available: {calendar['error']}"
+        return result
+    for connection in result.get("connections", []):
+        connection["calendar_check"] = _check_against_calendar(
+            connection, calendar.get("events", []), src, dst)
+    return result
 
 
 TOOL_FUNCTIONS = {
@@ -113,6 +172,8 @@ TOOLS = [
             "name": "get_connections",
             "description": "Returns the train connections from one city to another on one day: "
                            "departure, arrival, number of changes, train name and price (EUR). "
+                           "Each connection also has a 'calendar_check' that was computed against "
+                           "the user's appointments of that day: fits_calendar, conflicts, notes. "
                            "Use it for questions about how to travel, trains or departure times. "
                            "Returns an error if there are no connections for that route or day.",
             "parameters": {

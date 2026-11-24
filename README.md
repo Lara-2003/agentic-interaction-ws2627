@@ -50,9 +50,11 @@ python -m agent "How do I get to Munich on 29 Oct 2026, and do I need an umbrell
 
 A system prompt tells the model what it can help with, gives it today's date and asks it to look
 up everything with the tools (several tools per task if needed) instead of inventing values.
-For travel questions the agent also reads the calendar of that day and checks the connections
-against the appointments (arrives in time at the destination? which in-person appointments at the
-departure city are missed?).
+`get_connections` also reads the calendar of that day and adds a `calendar_check` to every
+connection (`fits_calendar`, `conflicts`, `notes`): does the train arrive before the appointment at
+the destination, which in-person appointments are missed after leaving, which online appointments
+fall into the ride. This is computed in code because the model compared times unreliably.
+Appointments whose location names no known city (e.g. a room like `O27/3302`) count as being in Ulm.
 
 The agent works in a loop: each step is one model call; requested tool calls are executed and
 their results sent back, until the model answers without a tool call. A failing tool call does
